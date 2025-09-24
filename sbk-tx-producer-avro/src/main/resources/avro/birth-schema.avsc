@@ -1,0 +1,26 @@
+{
+  "type": "record",
+  "name": "BirthEvent",
+  "namespace": "foo.avro.birth",
+  "fields": [
+    {
+      "name": "id",
+      "type": "long"
+    },
+    {
+      "name": "name",
+      "type": ["null", "string"],
+      "default": null
+    },
+    {
+      "name": "dob",
+      "type": ["null", { "type": "int", "logicalType": "date" }],
+      "default": null
+    },
+    {
+      "name": "town",
+      "type": ["null", "string"],
+      "default": null
+    }
+  ]
+}
