@@ -1,0 +1,145 @@
+{
+	"info": {
+		"_postman_id": "7aaeaaf2-0d3a-4168-b288-17cb6c58f293",
+		"name": "SBK-TX",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "1408280"
+	},
+	"item": [
+		{
+			"name": "Simple Producer",
+			"item": []
+		},
+		{
+			"name": "TX-Producer",
+			"item": []
+		},
+		{
+			"name": "Create",
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"id\": 1,\r\n    \"name\": \"John\",\r\n    \"dob\": \"1961-01-01\",\r\n    \"town\": \"Athens\",\r\n    \"weight\": 5.2\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "localhost:8080/births",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"births"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Create 2",
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"id\": 2,\r\n    \"name\": \"Peter\",\r\n    \"dob\": \"1821-01-01\",\r\n    \"town\": \"Sparti\",\r\n    \"weight\": 3.1\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "localhost:8080/births",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"births"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "GET All",
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "GET",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\"name\":\"John\", \"dateOfBirth\": \"2000-01-01\"}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "localhost:8080/births",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"births"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Actuator Health",
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"auth": {
+					"type": "noauth"
+				},
+				"method": "GET",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\"name\":\"John\", \"dateOfBirth\": \"2000-01-01\"}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "localhost:8085/actuator/health",
+					"host": [
+						"localhost"
+					],
+					"port": "8085",
+					"path": [
+						"actuator",
+						"health"
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}
