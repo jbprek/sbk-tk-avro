@@ -29,8 +29,7 @@ public class KafkaConfig {
         configProps.put("schema.registry.url", env.getProperty("spring.kafka.producer.properties.schema.registry.url"));
         configProps.put("acks", env.getProperty("spring.kafka.producer.properties.acks", "all"));
         configProps.put("enable.idempotence", env.getProperty("spring.kafka.producer.properties.enable.idempotence", "true"));
-        DefaultKafkaProducerFactory<String, BirthEvent> factory = new DefaultKafkaProducerFactory<>(configProps);
-        return factory;
+        return new DefaultKafkaProducerFactory<>(configProps);
     }
 
     @Bean
