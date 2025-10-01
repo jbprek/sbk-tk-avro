@@ -1,3 +1,4 @@
+# Use this for a transactional Kafka producer with Avro serialization
 spring:
   application:
     name: sbk-tx-producer
@@ -28,7 +29,7 @@ spring:
 
   kafka:
     bootstrap-servers: localhost:9092
-    topic: birth.register.avro
+    topic: birth.register
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: io.confluent.kafka.serializers.KafkaAvroSerializer

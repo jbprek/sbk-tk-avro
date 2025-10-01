@@ -15,12 +15,14 @@ public class ProcessorService {
 
     private final KafkaProducerService kafkaProducerService;
     private final BirthDaoService birthDaoService;
+    private final BirthMapper mapper;
 
-    @Transactional(transactionManager = "kafkaTM", propagation = Propagation.REQUIRES_NEW)
+    @Transactional(transactionManager = "dsTM")
     public Birth sendAndStore(Birth birth) {
         log.info("Processing birth: {}", birth);
         birthDaoService.persist(birth);
-        kafkaProducerService.sendKafka(birth);
+        var event = mapper.toBirthEvent(birth);
+        kafkaProducerService.sendKafka(event);
         return birth;
     }
 }

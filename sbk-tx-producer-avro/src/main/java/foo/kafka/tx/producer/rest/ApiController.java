@@ -5,7 +5,6 @@ import foo.kafka.tx.producer.persistence.BirthRepository;
 import foo.kafka.tx.producer.service.ProcessorService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -24,7 +23,6 @@ public class ApiController {
         return ResponseEntity.ok(saved);
     }
 
-    @Transactional(transactionManager = "dbTM", readOnly = true)
     @GetMapping
     public ResponseEntity<List<Birth>> getAllUsers() {
         var userEntities = repository.findAll();

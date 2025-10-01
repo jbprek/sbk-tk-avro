@@ -55,7 +55,7 @@ public class KafkaConfig {
         return ktm;
     }
 
-    @Bean(name={"dbTM", "transactionManager"})
+    @Bean(name={"dsTM", "transactionManager"})
     public PlatformTransactionManager jpaTransactionManager(EntityManagerFactory emf) {
         return new JpaTransactionManager(emf);
     }

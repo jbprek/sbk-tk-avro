@@ -13,7 +13,7 @@ public class BirthDaoService {
     @PersistenceContext
     private EntityManager entityManager;
 
-    @Transactional(transactionManager = "dbTM")
+    @Transactional(transactionManager = "dsTM")
     public Birth persist(Birth birth) {
         try {
             entityManager.persist(birth);
