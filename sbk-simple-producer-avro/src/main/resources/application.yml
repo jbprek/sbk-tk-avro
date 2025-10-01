@@ -1,0 +1,34 @@
+server:
+  port: 8085
+spring:
+  application:
+    name: sbk-tx-producer
+
+
+
+  kafka:
+    bootstrap-servers: localhost:9092
+    topic: birth.register.avro
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: io.confluent.kafka.serializers.KafkaAvroSerializer
+      properties:
+        enable.idempotence: true
+        acks: all
+        schema.registry.url: http://localhost:8081
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,env,beans
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    root: INFO
+    foo.kafka.tx.producer: DEBUG
+    org.springframework.transaction: TRACE
+    org.springframework.kafka.transaction: DEBUG
