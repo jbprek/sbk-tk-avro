@@ -8,5 +8,5 @@ CREATE TABLE IF NOT EXISTS birth_stats (
     reg_id BIGINT PRIMARY KEY,
     dob DATE,
     town VARCHAR(50),
-    UNIQUE KEY unique_name_dob (reg_id, dob, town)
+    UNIQUE KEY unique_name_dob (dob, town)
 ) ENGINE=InnoDB;
