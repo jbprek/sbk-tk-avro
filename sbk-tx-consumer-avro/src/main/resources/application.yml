@@ -1,0 +1,57 @@
+server:
+  port: 8086
+spring:
+  application:
+    name: sbk-tx-producer
+
+  datasource:
+    url: jdbc:mysql://localhost:3306/birth_analytics_db
+    username: birth_analytics
+    password: birth_analytics
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      idle-timeout: 30000
+      pool-name: HikariCP
+      max-lifetime: 1800000
+      connection-timeout: 30000
+      auto-commit: false
+      transaction-isolation: TRANSACTION_READ_COMMITTED
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+    open-in-view: false
+
+  kafka:
+    bootstrap-servers: localhost:9092
+    topic: birth.register.avro
+    consumer:
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: io.confluent.kafka.serializers.KafkaAvroDeserializer
+      group-id: birth-analytics-group-1
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      properties:
+        isolation.level: read_committed
+        schema.registry.url: http://localhost:8081
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,env,beans
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    org.springframework.transaction: TRACE
+    org.springframework.kafka.transaction: DEBUG
+    org.springframework.orm.jpa.JpaTransactionManager: DEBUG

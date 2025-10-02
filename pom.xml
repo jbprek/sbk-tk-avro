@@ -14,8 +14,14 @@
   </properties>
 
   <modules>
+    <!-- simple producer -->
+    <module>sbk-simple-producer-avro</module>
+    <!-- Transactional - Produces events and writes to DB in a single transaction -->
     <module>sbk-tx-producer-avro</module>
-<!--    <module>sbk-tx-consumer-avro</module>-->
+    <!-- Transactional - Consumes Transforms events and writes to DB in a single transaction -->
+    <module>sbk-tx-consumer-avro</module>
+    <!-- WIP Transactional - Spring Cloud Streams -Consumes Transforms events and writes to DB in a single transaction -->
+
     <module>sbk-scloud-tx-consumer-avro</module>
   </modules>
 
