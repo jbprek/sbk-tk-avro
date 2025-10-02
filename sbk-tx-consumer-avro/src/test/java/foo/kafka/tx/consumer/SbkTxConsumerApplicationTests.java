@@ -13,9 +13,11 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.env.Environment;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
+import org.springframework.kafka.core.KafkaAdmin;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.test.EmbeddedKafkaBroker;
 import org.springframework.kafka.test.context.EmbeddedKafka;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
@@ -25,6 +27,7 @@ import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ExecutionException;
 
 import static java.time.temporal.ChronoUnit.DAYS;
 import static java.util.concurrent.TimeUnit.SECONDS;
@@ -34,6 +37,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ActiveProfiles("test")
 @SpringBootTest
+@DirtiesContext(classMode = DirtiesContext.ClassMode.BEFORE_EACH_TEST_METHOD)
 @EmbeddedKafka(
         partitions = 1,
         topics = {"birth.register.avro"},
@@ -63,12 +67,16 @@ class SbkTxConsumerApplicationTests {
     }
 
     @Autowired
+    private KafkaAdmin kafkaAdmin;
+
+    @Autowired
     private KafkaTemplate<String, BirthEvent> kafkaTemplate;
 
     @Autowired
     private EventMapper mapper;
 
-    private final String topic = "birth.register.avro";
+    private String topic = "birth.register.avro";
+
 
     @MockitoSpyBean
     BirthStatEntryRepository repository;
@@ -78,11 +86,12 @@ class SbkTxConsumerApplicationTests {
     private EmbeddedKafkaBroker broker;
 
     @BeforeEach
-    void setUp() {
+    void setUp()  {
         repository.deleteAll();
         await().pollInterval(1, SECONDS)
                 .atMost(3, SECONDS)
                 .until(() -> repository.count() == 0);
+
     }
 
 
@@ -114,7 +123,7 @@ class SbkTxConsumerApplicationTests {
         // Send invalid event
         var event = createEvent(100L);
         event.setTown(null);
-        event.setDob(LocalDate.now().plus(1,DAYS));
+        event.setDob(LocalDate.now().plus(1, DAYS));
         kafkaTemplate.send(topic, event);
 
         //  Only the first one should be stored, the second should fail on unique constraint
