@@ -14,7 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class KafkaProducerService {
     private final KafkaTemplate<String, BirthEvent> birthEventKafkaTemplate;
 
-    @Value("${spring.kafka.topic}")
+    @Value("${spring.kafka.template.default-topic}")
     private String topic;
 
     @Transactional(transactionManager = "kafkaTM")

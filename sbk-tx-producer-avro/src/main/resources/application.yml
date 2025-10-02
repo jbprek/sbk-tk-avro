@@ -1,4 +1,7 @@
 spring:
+  config:
+    activate:
+      on-profile: local-run
   application:
     name: sbk-tx-producer
 
@@ -28,7 +31,6 @@ spring:
 
   kafka:
     bootstrap-servers: localhost:9092
-    topic: birth.register.avro
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: io.confluent.kafka.serializers.KafkaAvroSerializer
@@ -37,6 +39,9 @@ spring:
         enable.idempotence: true
         acks: all
         schema.registry.url: http://localhost:8081
+    template:
+      default-topic: birth.register.avro
+
 
 management:
   endpoints:

@@ -18,26 +18,25 @@ import java.time.LocalDate;
 @Entity
 @Table(name = "births")
 public class Birth {
-    @NotNull(message = "id must not be null")
     @Id
     @Column(name = "reg_id", nullable = false)
     private Long id;
 
-    @NotNull(message = "name must not be null")
     @Size(max = 100)
-    @Column(name = "name", length = 100)
+    @NotNull
+    @Column(name = "name", nullable = false, length = 100)
     private String name;
 
-    @NotNull(message = "dob must not be null")
-    @Column(name = "dob")
+    @NotNull
+    @Column(name = "dob", nullable = false)
     private LocalDate dob;
 
-    @NotNull(message = "town must not be null")
     @Size(max = 50)
-    @Column(name = "town", length = 50)
+    @NotNull
+    @Column(name = "town", nullable = false, length = 50)
     private String town;
 
-    @Column(name = "tm")
+    @Column(name = "reg_tm")
     private Instant registrationTime = Instant.now();
 
     @Column(name = "weight", precision = 3, scale = 1)
