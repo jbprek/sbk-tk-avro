@@ -1,6 +1,7 @@
 package foo.kafka.tx.consumer;
 
 import foo.avro.birth.BirthEvent;
+import foo.kafka.tx.consumer.service.KafkaHelper;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
 import jakarta.persistence.EntityManagerFactory;
 import lombok.extern.slf4j.Slf4j;
@@ -56,8 +57,9 @@ public class KafkaConfig {
     public DefaultErrorHandler errorHandler() {
         // 2 retries (3 attempts total: 1 initial + 2 retries)
         ConsumerRecordRecoverer recoverer = (record, ex) -> {
-            log.error("[TX] Error processing record: topic={}, partition={}, offset={}, key={}, value={}, exception={}",
-                    record.topic(), record.partition(), record.offset(), record.key(), record.value(), ex.toString());
+            var messageInfo = KafkaHelper.getRecordInfo(record);
+            log.error("[TX] Error processing record: {}, value={}, exception={}",
+                    messageInfo, record.value(), ex.toString(), ex);
             // You can add alerting logic here, e.g., send an email, push notification, etc.
         };
         DefaultErrorHandler errorHandler = new DefaultErrorHandler(recoverer, new FixedBackOff(0L, 2L));

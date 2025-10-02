@@ -26,6 +26,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
+import static java.time.temporal.ChronoUnit.DAYS;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -106,6 +107,22 @@ class SbkTxConsumerApplicationTests {
         await().pollInterval(1, SECONDS)
                 .atMost(3, SECONDS)
                 .until(() -> repository.count() == 0);
+    }
+
+    @Test
+    void testConstraintError() {
+        // Send invalid event
+        var event = createEvent(100L);
+        event.setTown(null);
+        event.setDob(LocalDate.now().plus(1,DAYS));
+        kafkaTemplate.send(topic, event);
+
+        //  Only the first one should be stored, the second should fail on unique constraint
+        await().pollInterval(1, SECONDS)
+                .atMost(3, SECONDS)
+                .until(() -> repository.count() == 0);
+
+
     }
 
     public static BirthEvent createEvent(Long id) {
