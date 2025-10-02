@@ -128,7 +128,7 @@ class SbkTxConsumerApplicationTests {
     public static BirthEvent createEvent(Long id) {
         return BirthEvent.newBuilder()
                 .setId(id)
-                .setDob(LocalDate.now())
+                .setDob(LocalDate.now().minus(10, DAYS))
                 .setName("John")
                 .setTown("Sparti")
                 .setWeight(BigDecimal.valueOf(3.1))
