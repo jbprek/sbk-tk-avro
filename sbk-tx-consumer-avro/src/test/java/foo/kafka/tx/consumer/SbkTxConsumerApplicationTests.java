@@ -4,6 +4,7 @@ import foo.avro.birth.BirthEvent;
 import foo.kafka.tx.consumer.persistence.BirthStatEntry;
 import foo.kafka.tx.consumer.persistence.BirthStatEntryRepository;
 import foo.kafka.tx.consumer.service.EventMapper;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -55,6 +56,7 @@ class SbkTxConsumerApplicationTests {
             props.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
             props.put("value.serializer", "io.confluent.kafka.serializers.KafkaAvroSerializer");
             props.put("schema.registry.url", "mock://embedded-registry");
+            props.put("specific.avro.reader", true);
             return new KafkaTemplate<>(new DefaultKafkaProducerFactory<>(props));
         }
     }
@@ -65,7 +67,7 @@ class SbkTxConsumerApplicationTests {
     @Autowired
     private EventMapper mapper;
 
-    private final  String topic = "birth.register.avro";
+    private final String topic = "birth.register.avro";
 
     @MockitoSpyBean
     BirthStatEntryRepository repository;
@@ -73,6 +75,14 @@ class SbkTxConsumerApplicationTests {
 
     @Autowired
     private EmbeddedKafkaBroker broker;
+
+    @BeforeEach
+    void setUp() {
+        repository.deleteAll();
+        await().pollInterval(1, SECONDS)
+                .atMost(3, SECONDS)
+                .until(() -> repository.count() == 0);
+    }
 
 
     @Test
@@ -86,6 +96,16 @@ class SbkTxConsumerApplicationTests {
             assertEquals(1L, stored.get().getId());
             assertEquals("Sparti", stored.get().getTown());
         });
+    }
+
+    @Test
+    void testMissingId() {
+        // Send event
+        kafkaTemplate.send(topic, createEvent(null));
+        // Assert Processing correct, stored in  DB
+        await().pollInterval(1, SECONDS)
+                .atMost(3, SECONDS)
+                .until(() -> repository.count() == 0);
     }
 
     public static BirthEvent createEvent(Long id) {

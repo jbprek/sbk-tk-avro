@@ -5,6 +5,7 @@ import io.confluent.kafka.serializers.KafkaAvroDeserializer;
 import jakarta.persistence.EntityManagerFactory;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -12,6 +13,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
+import org.springframework.kafka.listener.ConsumerRecordRecoverer;
 import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.orm.jpa.JpaTransactionManager;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -53,7 +55,23 @@ public class KafkaConfig {
     @Bean
     public DefaultErrorHandler errorHandler() {
         // 2 retries (3 attempts total: 1 initial + 2 retries)
-        return new DefaultErrorHandler(new FixedBackOff(0L, 2L));
+        ConsumerRecordRecoverer recoverer = (record, ex) -> {
+            log.error("[TX] Error processing record: topic={}, partition={}, offset={}, key={}, value={}, exception={}",
+                    record.topic(), record.partition(), record.offset(), record.key(), record.value(), ex.toString());
+            // You can add alerting logic here, e.g., send an email, push notification, etc.
+        };
+        DefaultErrorHandler errorHandler = new DefaultErrorHandler(recoverer, new FixedBackOff(0L, 2L));
+        errorHandler.setRetryListeners((record, ex, deliveryAttempt) -> {
+            if (deliveryAttempt > 2) {
+                log.warn("[TX] ALERT: Record failed after {} attempts: topic={}, partition={}, offset={}, key={}, value={}",
+                        deliveryAttempt, record.topic(), record.partition(), record.offset(), record.key(), record.value());
+                // You can add further alerting logic here
+            } else {
+                log.warn("[TX] Retry attempt {} for record: topic={}, partition={}, offset={}, key={}, value={}",
+                        deliveryAttempt, record.topic(), record.partition(), record.offset(), record.key(), record.value());
+            }
+        });
+        return errorHandler;
     }
 
     @Bean

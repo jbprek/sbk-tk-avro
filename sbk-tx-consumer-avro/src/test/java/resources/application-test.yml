@@ -47,3 +47,10 @@ spring:
         specific.avro.reader: true
     template:
       default-topic: birth.register.avro
+
+logging:
+  level:
+    root: INFO
+    foo.kafka.tx.producer: DEBUG
+    org.springframework.transaction: TRACE
+    org.springframework.kafka.transaction: DEBUG
