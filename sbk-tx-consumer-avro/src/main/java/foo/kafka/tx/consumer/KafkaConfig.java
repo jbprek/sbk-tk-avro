@@ -63,25 +63,22 @@ public class KafkaConfig {
     @Bean
     public DefaultErrorHandler errorHandler() {
         // Consumer-aware recoverer commits the offset for the failed record when error is non-retryable
-        ConsumerAwareRecordRecoverer recoverer = new ConsumerAwareRecordRecoverer() {
-            @Override
-            public void accept(org.apache.kafka.clients.consumer.ConsumerRecord<?, ?> rec, org.apache.kafka.clients.consumer.Consumer<?, ?> consumer, Exception ex) {
-                var messageInfo = KafkaHelper.getRecordInfo(rec);
-                Object value = rec.value();
-                log.error("[TX] Error processing record (recoverer): {}, value={}, exception={}, type={}, cause={}",
-                        messageInfo, value, ex == null ? "<null>" : ex.getMessage(), ex == null ? "<null>" : ex.getClass().getName(),
-                        ex != null && ex.getCause() != null ? ex.getCause().getClass().getName() : "null", ex);
-                // commit the offset so the record is not replayed (commit next offset)
-                TopicPartition tp = new TopicPartition(rec.topic(), rec.partition());
-                OffsetAndMetadata oam = new OffsetAndMetadata(rec.offset() + 1);
-                try {
-                    consumer.commitSync(Collections.singletonMap(tp, oam));
-                    log.warn("[TX] Committed offset for skipped record: {}", messageInfo);
-                } catch (Exception commitEx) {
-                    log.error("[TX] Failed to commit offset for skipped record {}: {}", messageInfo, commitEx.getMessage(), commitEx);
-                }
-                // You can add alerting logic here, e.g., send an email, push notification, etc.
+        ConsumerAwareRecordRecoverer recoverer = (rec, consumer, ex) -> {
+            var messageInfo = KafkaHelper.getRecordInfo(rec);
+            Object value = rec.value();
+            log.error("[TX] Error processing record (recoverer): {}, value={}, exception={}, type={}, cause={}",
+                    messageInfo, value, ex == null ? "<null>" : ex.getMessage(), ex == null ? "<null>" : ex.getClass().getName(),
+                    ex != null && ex.getCause() != null ? ex.getCause().getClass().getName() : "null", ex);
+            // commit the offset so the record is not replayed (commit next offset)
+            TopicPartition tp = new TopicPartition(rec.topic(), rec.partition());
+            OffsetAndMetadata oam = new OffsetAndMetadata(rec.offset() + 1);
+            try {
+                consumer.commitSync(Collections.singletonMap(tp, oam));
+                log.warn("[TX] Committed offset for skipped record: {}", messageInfo);
+            } catch (Exception commitEx) {
+                log.error("[TX] Failed to commit offset for skipped record {}: {}", messageInfo, commitEx.getMessage(), commitEx);
             }
+            // You can add alerting logic here, e.g., send an email, push notification, etc.
         };
         DefaultErrorHandler errorHandler = new DefaultErrorHandler(recoverer, new FixedBackOff(0L, MAX_ATTEMPTS));
         errorHandler.setRetryListeners((consumerRecord, ex, deliveryAttempt) -> {
