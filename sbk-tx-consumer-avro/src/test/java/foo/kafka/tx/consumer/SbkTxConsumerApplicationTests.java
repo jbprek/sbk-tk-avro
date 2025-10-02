@@ -65,7 +65,7 @@ class SbkTxConsumerApplicationTests {
     @Autowired
     private EventMapper mapper;
 
-    private String topic = "birth.register.avro";
+    private final  String topic = "birth.register.avro";
 
     @MockitoSpyBean
     BirthStatEntryRepository repository;

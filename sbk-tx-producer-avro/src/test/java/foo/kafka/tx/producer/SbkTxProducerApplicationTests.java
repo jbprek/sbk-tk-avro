@@ -45,7 +45,7 @@ import static org.mockito.Mockito.doThrow;
 )
 class SbkTxProducerApplicationTests {
 
-    private String topic = "birth.register.avro";
+    private final String topic = "birth.register.avro";
 
 
     @Autowired
@@ -124,9 +124,9 @@ class SbkTxProducerApplicationTests {
         }
 
         // Assert no Kafka message sent
-        await().during(Duration.ofSeconds(3)).atMost(5, SECONDS).untilAsserted(() -> {
-            assertThrows(Exception.class, () -> KafkaTestUtils.getSingleRecord(consumer, topic, Duration.ofSeconds(1)));
-        });
+        await().during(Duration.ofSeconds(3))
+                .atMost(5, SECONDS)
+                .untilAsserted(() -> assertThrows(Exception.class, () -> KafkaTestUtils.getSingleRecord(consumer, topic, Duration.ofSeconds(1))));
     }
 
     private static Birth createTestBirth(Long id) {
