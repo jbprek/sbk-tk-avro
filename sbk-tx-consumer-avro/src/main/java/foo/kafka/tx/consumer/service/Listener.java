@@ -15,7 +15,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @Slf4j
 @RequiredArgsConstructor
 @Service
-public class Processor {
+public class Listener {
     private final EntityManager entityManager;
     private final EventMapper eventMapper;
 
@@ -24,6 +24,7 @@ public class Processor {
     public void listen(BirthEvent event, ConsumerRecord<String, BirthEvent> message) {
 
         var entity = eventMapper.eventToEntity(event);
+        log.info("[TX] Starting transaction for event: {} (topic={}, partition={}, offset={})", event, message.topic(), message.partition(), message.offset());
 
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
@@ -36,7 +37,6 @@ public class Processor {
             }
         });
 
-        log.debug("[TX] Starting transaction for event: {} (topic={}, partition={}, offset={})", event, message.topic(), message.partition(), message.offset());
         entityManager.persist(entity);
     }
 
