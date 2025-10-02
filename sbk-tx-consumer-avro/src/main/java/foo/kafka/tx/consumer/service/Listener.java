@@ -42,7 +42,7 @@ public class Listener {
             repository.saveAndFlush(entity);
             log.info("[TX] Transaction committed for event at {} : {} stored as {} ", message, event, entity);
         } catch (Exception ex) {
-            log.error("[TX] Exception during DB save for event at : {}, Exception)", messageInfo, ex.getMessage());
+            log.error("[TX] Exception during DB save for event at : {}, error: {} )", messageInfo, ex.getMessage(),ex);
             throw ex; // rethrow to trigger rollback and error handler
         }
 

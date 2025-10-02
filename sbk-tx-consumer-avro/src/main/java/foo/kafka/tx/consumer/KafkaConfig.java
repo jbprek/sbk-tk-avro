@@ -27,6 +27,7 @@ import java.util.Map;
 @Configuration
 public class KafkaConfig {
 
+    public static final long MAX_ATTEMPTS = 2L;
     @Value("${spring.kafka.bootstrap-servers}")
     private  String bootstrapServers;
 
@@ -58,14 +59,15 @@ public class KafkaConfig {
         // 2 retries (3 attempts total: 1 initial + 2 retries)
         ConsumerRecordRecoverer recoverer = (record, ex) -> {
             var messageInfo = KafkaHelper.getRecordInfo(record);
-            log.error("[TX] Error processing record: {}, value={}, exception={}",
-                    messageInfo, record.value(), ex.toString(), ex);
+            log.error("[TX] Error processing record: {}, value={}, exception={}, type={}, cause={}",
+                    messageInfo, record.value(), ex.toString(), ex.getClass().getName(),
+                    ex.getCause() != null ? ex.getCause().getClass().getName() : "null", ex);
             // You can add alerting logic here, e.g., send an email, push notification, etc.
         };
-        DefaultErrorHandler errorHandler = new DefaultErrorHandler(recoverer, new FixedBackOff(0L, 2L));
+        DefaultErrorHandler errorHandler = new DefaultErrorHandler(recoverer, new FixedBackOff(0L, MAX_ATTEMPTS));
         errorHandler.setRetryListeners((record, ex, deliveryAttempt) -> {
-            if (deliveryAttempt > 2) {
-                log.warn("[TX] ALERT: Record failed after {} attempts: topic={}, partition={}, offset={}, key={}, value={}",
+            if (deliveryAttempt > MAX_ATTEMPTS) {
+                log.warn("[TX] Retry exhausted: Record failed after {} attempts: topic={}, partition={}, offset={}, key={}, value={}",
                         deliveryAttempt, record.topic(), record.partition(), record.offset(), record.key(), record.value());
                 // You can add further alerting logic here
             } else {
@@ -73,6 +75,14 @@ public class KafkaConfig {
                         deliveryAttempt, record.topic(), record.partition(), record.offset(), record.key(), record.value());
             }
         });
+        errorHandler.addNotRetryableExceptions(
+            org.springframework.orm.jpa.JpaSystemException.class,
+            org.springframework.dao.DataIntegrityViolationException.class,
+            jakarta.validation.ConstraintViolationException.class,
+            IllegalArgumentException.class,
+            org.springframework.transaction.TransactionSystemException.class,
+            jakarta.persistence.PersistenceException.class
+        );
         return errorHandler;
     }
 
