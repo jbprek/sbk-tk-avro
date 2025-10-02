@@ -25,10 +25,11 @@ class RecovererIntegrationTest {
     private KafkaTemplate<String, BirthEvent> kafkaTemplate;
 
     @MockitoSpyBean
+    @Autowired
     private BirthStatEntryRepository repository;
 
     @Test
-    void nonTransientDbErrorIsNotReplayed() throws Exception {
+    void nonTransientDbErrorIsNotReplayed() {
         // create invalid event that will fail validation (future dob and null town)
         var event = SbkTxConsumerApplicationTests.createEvent(200L);
         event.setTown(null);
@@ -42,7 +43,7 @@ class RecovererIntegrationTest {
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
-            return null;
+            return Boolean.TRUE;
         });
 
         // wait until the repository.saveAndFlush has been invoked once

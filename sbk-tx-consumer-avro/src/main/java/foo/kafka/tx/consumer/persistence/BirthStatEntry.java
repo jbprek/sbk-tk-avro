@@ -13,7 +13,7 @@ import java.time.LocalDate;
 @Setter
 @Entity
 @Table(name = "birth_stats", uniqueConstraints = {
-    @UniqueConstraint(name = "unique_name_dob", columnNames = {"dob", "town"})
+        @UniqueConstraint(name = "unique_name_dob", columnNames = {"dob", "town"})
 })
 public class BirthStatEntry {
     @Id

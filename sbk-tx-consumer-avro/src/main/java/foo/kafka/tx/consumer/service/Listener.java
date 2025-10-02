@@ -2,6 +2,7 @@ package foo.kafka.tx.consumer.service;
 
 import foo.avro.birth.BirthEvent;
 import foo.kafka.tx.consumer.persistence.BirthStatEntryRepository;
+import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -15,8 +16,12 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.TransactionSystemException;
 import jakarta.persistence.PersistenceException;
+import org.springframework.transaction.interceptor.TransactionAspectSupport;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
 
 
 @Slf4j
@@ -37,6 +42,8 @@ public class Listener {
         var entity = eventMapper.eventToEntity(event);
         log.info("[TX] Starting transaction for event at: {} : {}", messageInfo, event);
 
+        AtomicBoolean skipOnRollback = new AtomicBoolean(false);
+
         try {
             repository.saveAndFlush(entity);
             // do not acknowledge here; acknowledge only after transaction commits
@@ -45,16 +52,29 @@ public class Listener {
             log.error("[TX] Exception during DB save for event at : {}, error: {} )", messageInfo, ex.getMessage(), ex);
             if (isNonTransientDbError(ex)) {
                 Throwable root = getRootCause(ex);
-                log.warn("[TX] Non-transient DB error (root cause: {}), delegating to non-retryable recoverer for message: {}",
-                        root != null ? root.getClass().getName() + ": " + root.getMessage() : ex.getClass().getName(),
-                        messageInfo);
-                // Throw a custom non-retryable exception so the DefaultErrorHandler will invoke the recoverer (which commits offset)
-                throw new NonRetryableProcessingException("Non-transient DB error while processing message: " + messageInfo, ex);
+                String constraintDetails = formatConstraintViolations(root);
+                if (constraintDetails != null) {
+                    log.warn("[TX] Non-transient DB validation error ({}), will skip message after transaction completes: {}",
+                            constraintDetails, messageInfo);
+                } else {
+                    log.warn("[TX] Non-transient DB error (root cause: {}), will skip message after transaction completes: {}",
+                            root != null ? root.getClass().getName() + ": " + root.getMessage() : ex.getClass().getName(),
+                            messageInfo);
+                }
+                // mark that we want to skip (ack) even though the DB transaction will be rolled back
+                skipOnRollback.set(true);
+                // ensure current transaction is marked rollback so that DB changes are rolled back
+                TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+                // swallow the exception so the container won't treat it as an error (we'll ack after rollback)
+            } else {
+                throw ex; // let Kafka retry by throwing
             }
-            // rethrow transient exceptions so the DefaultErrorHandler will retry
-            throw ex;
         }
 
+        registerTransactionSynchronization(messageInfo, event, entity, acknowledgment, skipOnRollback);
+    }
+
+    private void registerTransactionSynchronization(String messageInfo, BirthEvent event, Object entity, Acknowledgment acknowledgment, AtomicBoolean skipOnRollback) {
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCompletion(int status) {
@@ -70,7 +90,19 @@ public class Listener {
                         }
                         log.debug("[TX] Commited details for event at {} : {}  stored as {} ", messageInfo, event, entity);
                     }
-                    case STATUS_ROLLED_BACK -> log.info("[TX] Transaction rolled back for event at {} ", messageInfo);
+                    case STATUS_ROLLED_BACK -> {
+                        log.info("[TX] Transaction rolled back for event at {} ", messageInfo);
+                        if (skipOnRollback.get()) {
+                            try {
+                                acknowledgment.acknowledge();
+                                log.warn("[TX] Acknowledged (skipped) message after rollback at: {}", messageInfo);
+                            } catch (Exception e) {
+                                log.error("[TX] Failed to acknowledge skipped message {}: {}", messageInfo, e.getMessage(), e);
+                            }
+                        } else {
+                            log.debug("[TX] Not acknowledging; message will be retried: {}", messageInfo);
+                        }
+                    }
                     default -> log.warn("[TX] Transaction status unknown for event at: {} ", messageInfo);
                 }
             }
@@ -100,4 +132,22 @@ public class Listener {
         }
         return root;
     }
+
+    private String formatConstraintViolations(Throwable ex) {
+        // find the nearest ConstraintViolationException in the cause chain
+        Throwable cur = ex;
+        while (cur != null) {
+            if (cur instanceof ConstraintViolationException cve) {
+                if (cve.getConstraintViolations() == null || cve.getConstraintViolations().isEmpty()) {
+                    return "constraint violations: none";
+                }
+                return cve.getConstraintViolations().stream()
+                        .map(v -> v.getPropertyPath() + "=" + v.getMessage())
+                        .collect(Collectors.joining(", "));
+            }
+            cur = cur.getCause();
+        }
+        return null;
+    }
+
 }

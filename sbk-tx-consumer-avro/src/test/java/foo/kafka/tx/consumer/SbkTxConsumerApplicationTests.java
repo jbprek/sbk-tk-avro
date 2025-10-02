@@ -27,7 +27,6 @@ import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ExecutionException;
 
 import static java.time.temporal.ChronoUnit.DAYS;
 import static java.util.concurrent.TimeUnit.SECONDS;
@@ -86,7 +85,7 @@ class SbkTxConsumerApplicationTests {
     private EmbeddedKafkaBroker broker;
 
     @BeforeEach
-    void setUp()  {
+    void setUp() {
         repository.deleteAll();
         await().pollInterval(1, SECONDS)
                 .atMost(3, SECONDS)
