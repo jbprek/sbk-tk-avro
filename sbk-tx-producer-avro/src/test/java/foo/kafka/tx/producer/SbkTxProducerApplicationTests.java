@@ -17,8 +17,7 @@ import org.springframework.kafka.test.EmbeddedKafkaBroker;
 import org.springframework.kafka.test.context.EmbeddedKafka;
 import org.springframework.kafka.test.utils.KafkaTestUtils;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 import java.math.BigDecimal;
 import java.time.Duration;
@@ -58,12 +57,8 @@ class SbkTxProducerApplicationTests {
     @Autowired
     private BirthMapper mapper;
 
-    @Autowired
+    @MockitoSpyBean
     private BirthRepository repository;
-
-    @MockitoBean
-    private BirthRepository mockRepository;
-
 
     private Consumer<String, BirthEvent> consumer;
 
@@ -87,27 +82,20 @@ class SbkTxProducerApplicationTests {
         consumer = createConsumer();
         broker.consumeFromAnEmbeddedTopic(consumer, topic);
 
-        Birth entity = new Birth();
-        entity.setId(1L);
-        entity.setDob(LocalDate.now());
-        entity.setName("John");
-        entity.setTown("Sparti");
-        entity.setWeight(BigDecimal.valueOf(3.1));
-        entity.setRegistrationTime(Instant.now());
-
-        BirthEvent event = mapper.toBirthEvent(entity);
-
+        Birth entity = createTestBirth(1L);
 
         processor.sendAndStore(entity);
 
+        var expectedEvent = mapper.toBirthEvent(entity);
+
         // Assert Kafka
         var record = KafkaTestUtils.getSingleRecord(consumer, topic, Duration.ofSeconds(5));
-        BirthEvent value = record.value();
+        var value = record.value();
         assertNotNull(value);
         assertNotNull(value); // String may be Utf8
         assertNotNull(value.getDob()); // String may be Utf8
-        assertEquals("Sparti", value.getTown()); // String may be Utf8
-        assertEquals("John", value.getName()); // String may be Utf8
+        assertEquals(expectedEvent.getTown(), value.getTown()); // String may be Utf8
+        assertEquals(expectedEvent.getName(), value.getName()); // String may be Utf8
 
         // Assert DB using Awaitility
         await().atMost(5, SECONDS).untilAsserted(() -> {
@@ -123,25 +111,32 @@ class SbkTxProducerApplicationTests {
         consumer = createConsumer();
         broker.consumeFromAnEmbeddedTopic(consumer, topic);
 
-        Birth entity = new Birth();
-        entity.setId(2L);
-        entity.setDob(LocalDate.now());
-        entity.setName("Error");
-        entity.setTown("FailTown");
-        entity.setWeight(BigDecimal.valueOf(2.5));
-        entity.setRegistrationTime(Instant.now());
+        Birth entity = createTestBirth(2L);
 
         // Simulate DB error
-        doThrow(new RuntimeException("DB error")).when(mockRepository).saveAndFlush(entity);
+        doThrow(new RuntimeException("DB error")).when(repository).saveAndFlush(entity);
 
         // Call service method
         try {
             processor.sendAndStore(entity);
-        } catch (Exception ignored) {}
+        } catch (Exception ignored) {
+            // Exception is expected due to simulated DB error
+        }
 
         // Assert no Kafka message sent
         await().during(Duration.ofSeconds(3)).atMost(5, SECONDS).untilAsserted(() -> {
             assertThrows(Exception.class, () -> KafkaTestUtils.getSingleRecord(consumer, topic, Duration.ofSeconds(1)));
         });
+    }
+
+    private static Birth createTestBirth(Long id) {
+        Birth entity = new Birth();
+        entity.setId(id);
+        entity.setDob(LocalDate.now());
+        entity.setName("John");
+        entity.setTown("Sparti");
+        entity.setWeight(BigDecimal.valueOf(3.1));
+        entity.setRegistrationTime(Instant.now());
+        return entity;
     }
 }
