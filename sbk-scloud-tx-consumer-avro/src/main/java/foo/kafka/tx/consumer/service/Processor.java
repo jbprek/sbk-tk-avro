@@ -2,7 +2,6 @@ package foo.kafka.tx.consumer.service;
 
 import foo.avro.birth.BirthEvent;
 import foo.kafka.tx.consumer.persistence.BirthStatEntryRepository;
-import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceException;
 import jakarta.validation.ConstraintViolationException;
 import lombok.RequiredArgsConstructor;
@@ -31,10 +30,18 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Service
 public class Processor {
-    private final EntityManager entityManager;
     private final EventMapper eventMapper;
     private final BirthStatEntryRepository repository;
 
+    // small holder to reduce long parameter lists passed around
+    private record AckInfo(
+            Acknowledgment acknowledgment,
+            Consumer<?, ?> consumer,
+            String topic,
+            Integer partition,
+            Long offset,
+            String messageInfo
+    ) {}
 
     @Transactional(
             transactionManager = "dbTM",
@@ -86,69 +93,74 @@ public class Processor {
         Acknowledgment acknowledgment = event.getHeaders().get(KafkaHeaders.ACKNOWLEDGMENT, Acknowledgment.class);
         Consumer<?, ?> consumer = event.getHeaders().get(KafkaHeaders.CONSUMER, Consumer.class);
 
-        registerTransactionSynchronization(topic, messageInfo, event.getPayload(), entity, acknowledgment, consumer, partition, offset, skipOnRollback);
+        AckInfo ackInfo = new AckInfo(acknowledgment, consumer, topic, partition, offset, messageInfo);
+
+        registerTransactionSynchronization(ackInfo, event.getPayload(), entity, skipOnRollback);
     }
 
-    private void registerTransactionSynchronization(String topic, String messageInfo, BirthEvent event, Object entity, Acknowledgment acknowledgment, Consumer<?, ?> consumer, Integer partition, Long offset, AtomicBoolean skipOnRollback) {
+    private void registerTransactionSynchronization(AckInfo ackInfo, BirthEvent event, Object entity, AtomicBoolean skipOnRollback) {
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCompletion(int status) {
                 switch (status) {
-                    case STATUS_COMMITTED -> {
-                        log.info("[TX] Transaction committed for event at: {} ", messageInfo);
+                    case STATUS_COMMITTED:
+                        log.info("[TX] Transaction committed for event at: {} ", ackInfo.messageInfo());
                         // only acknowledge after successful DB commit
-                        try {
-                            if (acknowledgment != null) {
-                                acknowledgment.acknowledge();
-                                log.debug("[TX] Acknowledged message after commit: {}", messageInfo);
-                            } else if (consumer != null && partition != null && offset != null) {
-                                // commit offset manually using the provided topic
-                                try {
-                                    TopicPartition tp = new TopicPartition(topic, partition);
-                                    Map<TopicPartition, OffsetAndMetadata> commit = Collections.singletonMap(tp, new OffsetAndMetadata(offset + 1));
-                                    consumer.commitSync(commit);
-                                    log.debug("[TX] Manually committed offset after commit at: {} -> {}", messageInfo, commit);
-                                } catch (Exception e) {
-                                    log.error("[TX] Failed to manually commit offset after commit for {}: {}", messageInfo, e.getMessage(), e);
-                                }
-                            } else {
-                                log.warn("[TX] No acknowledgment or consumer available to commit for: {}", messageInfo);
-                            }
-                        } catch (Exception e) {
-                            log.error("[TX] Failed to acknowledge after commit for {}: {}", messageInfo, e.getMessage(), e);
-                        }
-                        log.debug("[TX] Commited details for event at {} : {}  stored as {} ", messageInfo, event, entity);
-                    }
-                    case STATUS_ROLLED_BACK -> {
-                        log.info("[TX] Transaction rolled back for event at {} ", messageInfo);
+                        acknowledgeOrCommit(ackInfo, false, "after commit");
+                        log.debug("[TX] Commited details for event at {} : {}  stored as {} ", ackInfo.messageInfo(), event, entity);
+                        break;
+                    case STATUS_ROLLED_BACK:
+                        log.info("[TX] Transaction rolled back for event at {} ", ackInfo.messageInfo());
                         if (skipOnRollback.get()) {
-                            try {
-                                if (acknowledgment != null) {
-                                    acknowledgment.acknowledge();
-                                    log.warn("[TX] Acknowledged (skipped) message after rollback at: {}", messageInfo);
-                                } else if (consumer != null && partition != null && offset != null) {
-                                    try {
-                                        TopicPartition tp = new TopicPartition(topic, partition);
-                                        Map<TopicPartition, OffsetAndMetadata> commit = Collections.singletonMap(tp, new OffsetAndMetadata(offset + 1));
-                                        consumer.commitSync(commit);
-                                        log.warn("[TX] Manually committed offset (skipped) after rollback at: {} -> {}", messageInfo, commit);
-                                    } catch (Exception e) {
-                                        log.error("[TX] Failed to manually commit skipped message {}: {}", messageInfo, e.getMessage(), e);
-                                    }
-                                } else {
-                                    log.warn("[TX] No acknowledgment or consumer available to skip for: {}", messageInfo);
-                                }
-                            } catch (Exception e) {
-                                log.error("[TX] Failed to acknowledge skipped message {}: {}", messageInfo, e.getMessage(), e);
-                            }
+                            // we want to skip this message even though the DB transaction was rolled back
+                            acknowledgeOrCommit(ackInfo, true, "skipped after rollback");
                         } else {
-                            log.debug("[TX] Not acknowledging; message will be retried: {}", messageInfo);
+                            log.debug("[TX] Not acknowledging; message will be retried: {}", ackInfo.messageInfo());
                         }
-                    }
-                    default -> log.warn("[TX] Transaction status unknown for event at: {} ", messageInfo);
+                        break;
+                    default:
+                        log.warn("[TX] Transaction status unknown for event at: {} ", ackInfo.messageInfo());
                 }
             }
         });
+    }
+
+    // helper that centralizes acknowledgment vs manual offset commit logic
+    // Suppress resource warning: the Kafka Consumer is managed by the container and must not be closed here.
+    @SuppressWarnings("resource")
+    private void acknowledgeOrCommit(AckInfo ackInfo, boolean skipMode, String action) {
+        try {
+            if (ackInfo.acknowledgment() != null) {
+                ackInfo.acknowledgment().acknowledge();
+                if (skipMode) {
+                    log.warn("[TX] Acknowledged (skipped) message {} at: {}", action, ackInfo.messageInfo());
+                } else {
+                    log.debug("[TX] Acknowledged message {}: {}", action, ackInfo.messageInfo());
+                }
+            } else if (ackInfo.consumer() != null && ackInfo.partition() != null && ackInfo.offset() != null) {
+                // extract manual commit to its own method to avoid nested try blocks
+                commitOffset(ackInfo.consumer(), ackInfo.topic(), ackInfo.partition(), ackInfo.offset(), action, ackInfo.messageInfo(), skipMode);
+            } else {
+                log.warn("[TX] No acknowledgment or consumer available to {} for: {}", action, ackInfo.messageInfo());
+            }
+        } catch (Exception e) {
+            log.error("[TX] Failed to acknowledge/commit {} for {}: {}", action, ackInfo.messageInfo(), e.getMessage(), e);
+        }
+    }
+
+    private void commitOffset(Consumer<?, ?> consumer, String topic, Integer partition, Long offset, String action, String messageInfo, boolean skipMode) {
+        try {
+            TopicPartition tp = new TopicPartition(topic, partition);
+            Map<TopicPartition, OffsetAndMetadata> commit = Collections.singletonMap(tp, new OffsetAndMetadata(offset + 1));
+            consumer.commitSync(commit);
+            if (skipMode) {
+                log.warn("[TX] Manually committed offset (skipped) {} at: {} -> {}", action, messageInfo, commit);
+            } else {
+                log.debug("[TX] Manually committed offset {} at: {} -> {}", action, messageInfo, commit);
+            }
+        } catch (Exception e) {
+            log.error("[TX] Failed to manually commit offset {} for {}: {}", action, messageInfo, e.getMessage(), e);
+        }
     }
 
     // walk cause chain to detect DB exceptions that are non-transient and should be skipped

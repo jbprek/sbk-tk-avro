@@ -7,8 +7,12 @@ import foo.kafka.tx.consumer.service.EventMapper;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+import org.mockito.stubbing.Answer;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
@@ -29,6 +33,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.time.temporal.ChronoUnit.DAYS;
 import static java.util.concurrent.TimeUnit.SECONDS;
@@ -36,8 +41,7 @@ import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.*;
 
 @ActiveProfiles("test")
 @SpringBootTest
@@ -68,9 +72,7 @@ class SbkCloudTxConsumerApplicationTests {
             props.put("specific.avro.reader", true);
 
             DefaultKafkaProducerFactory<String, BirthEvent> pf = new DefaultKafkaProducerFactory<>(props);
-            // Ensure producer transactions are enabled in tests so executeInTransaction actually starts a transaction
-            String txPrefix = env.getProperty("spring.kafka.producer.transaction-id-prefix", "tx-foo-");
-            pf.setTransactionIdPrefix(txPrefix);
+            // In tests we don't need a transactional producer; keep the default non-transactional producer
             return new KafkaTemplate<>(pf);
         }
     }
@@ -90,9 +92,24 @@ class SbkCloudTxConsumerApplicationTests {
     @MockitoSpyBean
     BirthStatEntryRepository repository;
 
-
     @Autowired
     private EmbeddedKafkaBroker broker;
+
+//    @TestConfiguration
+//    static class SpyConfig {
+//        @Bean
+//        public static BeanPostProcessor repositorySpyPostProcessor() {
+//            return new BeanPostProcessor() {
+//                @Override
+//                public Object postProcessAfterInitialization(Object bean, String beanName) {
+//                    if (bean instanceof BirthStatEntryRepository) {
+//                        return Mockito.spy(bean);
+//                    }
+//                    return bean;
+//                }
+//            };
+//        }
+//    }
 
     @BeforeEach
     void setUp() {
@@ -150,15 +167,12 @@ class SbkCloudTxConsumerApplicationTests {
         event.setTown(null);
         event.setDob(LocalDate.now().plusDays(1));
 
-        // send event
-        kafkaTemplate.executeInTransaction(k -> {
-            try {
-                k.send("birth.register.avro", event).get();
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
-            return Boolean.TRUE;
-        });
+        // send event synchronously (no transaction required for tests)
+        try {
+            kafkaTemplate.send(topic, event).get();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
 
         // wait until the repository.saveAndFlush has been invoked once
         Awaitility.await().atMost(10, TimeUnit.SECONDS).pollInterval(200, TimeUnit.MILLISECONDS)
@@ -167,6 +181,36 @@ class SbkCloudTxConsumerApplicationTests {
         // ensure no additional invocations happen for a short stability window (no replay)
         Awaitility.await().during(500, TimeUnit.MILLISECONDS).atMost(2, TimeUnit.SECONDS)
                 .untilAsserted(() -> verify(repository, times(1)).saveAndFlush(any()));
+    }
+
+    @Test
+    void transientDbErrorIsRetried() throws Exception {
+        // simulate a transient DB error on first saveAndFlush and success on retry
+        var event = createEvent(300L);
+        AtomicInteger counter = new AtomicInteger();
+        Answer<Object> answer = invocation -> {
+            if (counter.getAndIncrement() == 0) {
+                throw new org.springframework.dao.TransientDataAccessResourceException("simulated transient db error");
+            }
+            // on subsequent invocations call through to the real repository method
+            return invocation.callRealMethod();
+        };
+        doAnswer(answer).when(repository).saveAndFlush(any());
+
+        // send event synchronously to ensure immediate processing
+
+        kafkaTemplate.send(topic, event).get();
+
+
+        await().pollInterval(1, SECONDS)
+                .atMost(5, SECONDS)
+                .untilAsserted(() -> {
+                    Optional<BirthStatEntry> stored = repository.findById(300L);
+                    assertTrue(stored.isPresent());
+                });
+
+        // verify that saveAndFlush was attempted at least twice (initial failure + retry)
+        verify(repository, org.mockito.Mockito.atLeast(2)).saveAndFlush(any());
     }
 
     public static BirthEvent createEvent(Long id) {
