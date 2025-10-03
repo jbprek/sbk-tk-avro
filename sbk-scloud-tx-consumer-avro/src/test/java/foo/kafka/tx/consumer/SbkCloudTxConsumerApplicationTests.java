@@ -1,18 +1,16 @@
 package foo.kafka.tx.consumer;
 
 import foo.avro.birth.BirthEvent;
+import foo.kafka.tx.consumer.persistence.BirthStatDao;
 import foo.kafka.tx.consumer.persistence.BirthStatEntry;
 import foo.kafka.tx.consumer.persistence.BirthStatEntryRepository;
 import foo.kafka.tx.consumer.service.EventMapper;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 import org.mockito.stubbing.Answer;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
@@ -90,26 +88,15 @@ class SbkCloudTxConsumerApplicationTests {
 
 
     @MockitoSpyBean
+    BirthStatDao dao;
+
+    @Autowired
     BirthStatEntryRepository repository;
+
+
 
     @Autowired
     private EmbeddedKafkaBroker broker;
-
-//    @TestConfiguration
-//    static class SpyConfig {
-//        @Bean
-//        public static BeanPostProcessor repositorySpyPostProcessor() {
-//            return new BeanPostProcessor() {
-//                @Override
-//                public Object postProcessAfterInitialization(Object bean, String beanName) {
-//                    if (bean instanceof BirthStatEntryRepository) {
-//                        return Mockito.spy(bean);
-//                    }
-//                    return bean;
-//                }
-//            };
-//        }
-//    }
 
     @BeforeEach
     void setUp() {
@@ -195,7 +182,7 @@ class SbkCloudTxConsumerApplicationTests {
             // on subsequent invocations call through to the real repository method
             return invocation.callRealMethod();
         };
-        doAnswer(answer).when(repository).saveAndFlush(any());
+        doAnswer(answer).when(dao).saveAndFlush(any());
 
         // send event synchronously to ensure immediate processing
 
@@ -210,7 +197,7 @@ class SbkCloudTxConsumerApplicationTests {
                 });
 
         // verify that saveAndFlush was attempted at least twice (initial failure + retry)
-        verify(repository, org.mockito.Mockito.atLeast(2)).saveAndFlush(any());
+        verify(dao, org.mockito.Mockito.atLeast(2)).saveAndFlush(any());
     }
 
     public static BirthEvent createEvent(Long id) {

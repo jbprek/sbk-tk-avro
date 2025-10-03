@@ -1,6 +1,7 @@
 package foo.kafka.tx.consumer.service;
 
 import foo.avro.birth.BirthEvent;
+import foo.kafka.tx.consumer.persistence.BirthStatDao;
 import foo.kafka.tx.consumer.persistence.BirthStatEntryRepository;
 import jakarta.persistence.PersistenceException;
 import jakarta.validation.ConstraintViolationException;
@@ -31,7 +32,7 @@ import java.util.stream.Collectors;
 @Service
 public class Processor {
     private final EventMapper eventMapper;
-    private final BirthStatEntryRepository repository;
+    private final BirthStatDao repository;
 
     // small holder to reduce long parameter lists passed around
     private record AckInfo(
