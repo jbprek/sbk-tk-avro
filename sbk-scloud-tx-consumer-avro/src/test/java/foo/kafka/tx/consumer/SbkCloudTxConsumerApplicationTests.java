@@ -77,19 +77,14 @@ class SbkCloudTxConsumerApplicationTests {
 
     @Autowired
     private KafkaAdmin kafkaAdmin;
-
     @Autowired
     private KafkaTemplate<String, BirthEvent> kafkaTemplate;
-
     @Autowired
     private EventMapper mapper;
-
     private String topic = "birth.register.avro";
-
 
     @MockitoSpyBean
     BirthStatDao dao;
-
     @Autowired
     BirthStatEntryRepository repository;
 
@@ -163,11 +158,11 @@ class SbkCloudTxConsumerApplicationTests {
 
         // wait until the repository.saveAndFlush has been invoked once
         Awaitility.await().atMost(10, TimeUnit.SECONDS).pollInterval(200, TimeUnit.MILLISECONDS)
-                .untilAsserted(() -> verify(repository, times(1)).saveAndFlush(any()));
+                .untilAsserted(() -> verify(dao, times(1)).saveAndFlush(any()));
 
         // ensure no additional invocations happen for a short stability window (no replay)
         Awaitility.await().during(500, TimeUnit.MILLISECONDS).atMost(2, TimeUnit.SECONDS)
-                .untilAsserted(() -> verify(repository, times(1)).saveAndFlush(any()));
+                .untilAsserted(() -> verify(dao, times(1)).saveAndFlush(any()));
     }
 
     @Test
