@@ -53,6 +53,7 @@ spring:
     stream:
       bindings:
         processBirthEvent-in-0:
+          group: birth-analytics-group-3
           consumer:
             use-native-decoding: true
       kafka:
@@ -62,6 +63,13 @@ spring:
               ackMode: MANUAL
               configuration:
                 enable.auto.commit: false
+                key.deserializer: org.apache.kafka.common.serialization.StringDeserializer
+                value.deserializer: io.confluent.kafka.serializers.KafkaAvroDeserializer
+                schema.registry.url: mock://embedded-registry
+                specific.avro.reader: true
+                auto.register.schemas: true
+                startOffset: earliest
+                resetOffsets: true
         binder:
           brokers: ${spring.embedded.kafka.brokers}
           configuration:
