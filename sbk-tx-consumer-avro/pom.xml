@@ -13,19 +13,7 @@
     <version>0.0.1-SNAPSHOT</version>
     <name>sbk-tx-consumer-avro</name>
     <description>sbk-tx-consumer-avro</description>
-    <url/>
-    <licenses>
-        <license/>
-    </licenses>
-    <developers>
-        <developer/>
-    </developers>
-    <scm>
-        <connection/>
-        <developerConnection/>
-        <tag/>
-        <url/>
-    </scm>
+
     <properties>
         <java.version>21</java.version>
         <mapstruct.version>1.6.1</mapstruct.version>

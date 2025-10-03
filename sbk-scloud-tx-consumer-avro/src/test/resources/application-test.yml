@@ -1,0 +1,75 @@
+spring:
+
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    username: sa
+    password: ""
+    driver-class-name: org.h2.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      idle-timeout: 30000
+      pool-name: HikariCP
+      max-lifetime: 1800000
+      connection-timeout: 30000
+      auto-commit: false
+      transaction-isolation: TRANSACTION_READ_COMMITTED
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+    open-in-view: false
+  kafka:
+    bootstrap-servers: ${spring.embedded.kafka.brokers}
+    properties:
+      schema.registry.url: mock://embedded-registry
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: io.confluent.kafka.serializers.KafkaAvroSerializer
+      acks: all
+      retries: 5
+      enable-idempotence: true
+      transaction-id-prefix: tx-foo-
+      properties:
+        schema.registry.url: mock://embedded-registry
+        acks: all
+        enable.idempotence: true
+    consumer:
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: io.confluent.kafka.serializers.KafkaAvroDeserializer
+      group-id: test-group
+      auto-offset-reset: earliest
+      properties:
+        specific.avro.reader: true
+    template:
+      default-topic: birth.register.avro
+
+  # Ensure the Spring Cloud Stream Kafka binder uses the embedded Kafka broker in tests
+  cloud:
+    stream:
+      bindings:
+        processBirthEvent-in-0:
+          consumer:
+            use-native-decoding: true
+      kafka:
+        bindings:
+          processBirthEvent-in-0:
+            consumer:
+              ackMode: MANUAL
+              configuration:
+                enable.auto.commit: false
+        binder:
+          brokers: ${spring.embedded.kafka.brokers}
+          configuration:
+            schema.registry.url: mock://embedded-registry
+
+logging:
+  level:
+    root: INFO
+    foo.kafka.tx.producer: DEBUG
+    org.springframework.transaction: TRACE
+    org.springframework.kafka.transaction: DEBUG

@@ -1,0 +1,85 @@
+server:
+  port: 10010
+spring:
+  application:
+    name: sbk-scloud-tx-consumer
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      value-serializer: io.confluent.kafka.serializers.KafkaAvroSerializer
+    consumer:
+      value-deserializer: io.confluent.kafka.serializers.KafkaAvroDeserializer
+      group-id: birth-analytics-group-2
+    properties:
+      schema.registry.url: http://localhost:8081
+    topic: birth.register.avro
+  datasource:
+    url: jdbc:mysql://localhost:3306/birth_analytics_db
+    username: birth_analytics
+    password: birth_analytics
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      idle-timeout: 30000
+      pool-name: HikariCP
+      max-lifetime: 1800000
+      connection-timeout: 30000
+      auto-commit: false
+      transaction-isolation: TRANSACTION_READ_COMMITTED
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+    open-in-view: false
+
+  cloud:
+    stream:
+      bindings:
+        processBirthEvent-in-0:
+          destination: birth.register.avro
+          group: birth-analytics-group-2
+          consumer:
+            use-native-decoding: true
+
+      kafka:
+        bindings:
+          processBirthEvent-in-0:
+            consumer:
+              configuration:
+                key.deserializer: org.apache.kafka.common.serialization.StringDeserializer
+                value.deserializer: io.confluent.kafka.serializers.KafkaAvroDeserializer
+                schema.registry.url: http://localhost:8081
+                specific.avro.reader: true
+                startOffset: earliest
+                resetOffsets: true
+
+        binder:
+          brokers: localhost:9092
+          configuration:
+            schema.registry.url: http://localhost:8081
+
+
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,env,beans
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    foo.kafka.tx.consumer: DEBUG
+    org.springframework.transaction: TRACE
+    org.springframework.kafka.transaction: DEBUG
+    org.springframework.orm.jpa.JpaTransactionManager: DEBUG
+    org.springframework.cloud.stream: DEBUG
+    org.springframework.messaging: DEBUG
+    root: INFO
