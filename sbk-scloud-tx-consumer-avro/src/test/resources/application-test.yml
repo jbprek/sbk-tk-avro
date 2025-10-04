@@ -1,4 +1,33 @@
 spring:
+  cloud:
+    function:
+      definition: processBirthEvent
+    stream:
+      bindings:
+        processBirthEvent-in-0:
+          destination: birth.register.avro
+          group: birth-analytics-group-3
+          consumer:
+            use-native-decoding: true
+
+      kafka:
+        bindings:
+          processBirthEvent-in-0:
+            consumer:
+              ackMode: MANUAL
+              configuration:
+                key.deserializer: org.apache.kafka.common.serialization.StringDeserializer
+                value.deserializer: io.confluent.kafka.serializers.KafkaAvroDeserializer
+                schema.registry.url: mock://embedded-registry
+                specific.avro.reader: true
+                auto.register.schemas: true
+                enable.auto.commit: false
+                startOffset: earliest
+                resetOffsets: true
+        binder:
+          brokers: ${spring.embedded.kafka.brokers}
+          configuration:
+            schema.registry.url: mock://embedded-registry
 
   datasource:
     url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
@@ -23,10 +52,17 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.H2Dialect
     open-in-view: false
+
+  # Primary Kafka settings for tests (embedded broker)
   kafka:
+    # ensure Spring Kafka uses the embedded broker
     bootstrap-servers: ${spring.embedded.kafka.brokers}
+
+    # global properties (some components read this path)
     properties:
       schema.registry.url: mock://embedded-registry
+
+    # producer-specific settings (also set nested properties.schema.registry.url)
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: io.confluent.kafka.serializers.KafkaAvroSerializer
@@ -38,6 +74,8 @@ spring:
         schema.registry.url: mock://embedded-registry
         acks: all
         enable.idempotence: true
+
+    # consumer-specific settings (include properties.schema.registry.url)
     consumer:
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: io.confluent.kafka.serializers.KafkaAvroDeserializer
@@ -45,35 +83,12 @@ spring:
       auto-offset-reset: earliest
       properties:
         specific.avro.reader: true
+        schema.registry.url: mock://embedded-registry
+        enable.auto.commit: false
+
     template:
       default-topic: birth.register.avro
 
-  # Ensure the Spring Cloud Stream Kafka binder uses the embedded Kafka broker in tests
-  cloud:
-    stream:
-      bindings:
-        processBirthEvent-in-0:
-          group: birth-analytics-group-3
-          consumer:
-            use-native-decoding: true
-      kafka:
-        bindings:
-          processBirthEvent-in-0:
-            consumer:
-              ackMode: MANUAL
-              configuration:
-                enable.auto.commit: false
-                key.deserializer: org.apache.kafka.common.serialization.StringDeserializer
-                value.deserializer: io.confluent.kafka.serializers.KafkaAvroDeserializer
-                schema.registry.url: mock://embedded-registry
-                specific.avro.reader: true
-                auto.register.schemas: true
-                startOffset: earliest
-                resetOffsets: true
-        binder:
-          brokers: ${spring.embedded.kafka.brokers}
-          configuration:
-            schema.registry.url: mock://embedded-registry
 
 logging:
   level:

@@ -81,3 +81,4 @@ logging:
     org.springframework.cloud.stream: DEBUG
     org.springframework.messaging: DEBUG
     root: INFO
+

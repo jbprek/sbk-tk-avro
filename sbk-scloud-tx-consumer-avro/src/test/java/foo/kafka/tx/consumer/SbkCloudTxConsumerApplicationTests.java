@@ -14,7 +14,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
-import org.springframework.core.env.Environment;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaAdmin;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -23,6 +22,7 @@ import org.springframework.kafka.test.context.EmbeddedKafka;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import org.springframework.core.env.Environment;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -61,7 +61,7 @@ class SbkCloudTxConsumerApplicationTests {
         private String bootstrapServers;
 
         @Bean
-        public KafkaTemplate<String, BirthEvent> kafkaTemplate(Environment env) {
+        public KafkaTemplate<String, BirthEvent> kafkaTemplate(org.springframework.core.env.Environment env) {
             Map<String, Object> props = new HashMap<>();
             props.put("bootstrap.servers", env.getProperty("spring.kafka.bootstrap-servers", bootstrapServers));
             props.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
@@ -88,10 +88,11 @@ class SbkCloudTxConsumerApplicationTests {
     @Autowired
     BirthStatEntryRepository repository;
 
-
-
     @Autowired
     private EmbeddedKafkaBroker broker;
+
+    @Autowired
+    private Environment env;
 
     @BeforeEach
     void setUp() {
@@ -99,9 +100,7 @@ class SbkCloudTxConsumerApplicationTests {
         await().pollInterval(1, SECONDS)
                 .atMost(3, SECONDS)
                 .until(() -> repository.count() == 0);
-
     }
-
 
     @Test
     void testSuccessfulProcessing() {
@@ -138,8 +137,6 @@ class SbkCloudTxConsumerApplicationTests {
         await().pollInterval(1, SECONDS)
                 .atMost(3, SECONDS)
                 .until(() -> repository.count() == 0);
-
-
     }
 
     @Test
@@ -193,6 +190,20 @@ class SbkCloudTxConsumerApplicationTests {
 
         // verify that saveAndFlush was attempted at least twice (initial failure + retry)
         verify(dao, org.mockito.Mockito.atLeast(2)).saveAndFlush(any());
+    }
+
+    @Test
+    void testResolvedTestProperties() {
+        // Ensure Spring resolved the embedded broker and mock schema registry for tests
+        String bootstrap = env.getProperty("spring.kafka.bootstrap-servers");
+        String schemaUrl = env.getProperty("spring.kafka.properties.schema.registry.url");
+        String binderBrokers = env.getProperty("spring.cloud.stream.kafka.binder.brokers");
+        String funcDef = env.getProperty("spring.cloud.function.definition");
+
+        assertTrue(bootstrap != null && bootstrap.contains("127.0.0.1"), "bootstrap should point to embedded broker");
+        assertEquals("mock://embedded-registry", schemaUrl);
+        assertTrue(binderBrokers != null && binderBrokers.contains("127.0.0.1"));
+        assertEquals("processBirthEvent", funcDef);
     }
 
     public static BirthEvent createEvent(Long id) {
